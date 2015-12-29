@@ -1,4 +1,5 @@
 #include <string>
+#include <vector>
 #include <python2.7/Python.h>
 #include <unistd.h>
 #include <glib.h>
@@ -11,29 +12,11 @@ int foo(int a, int b) {
     return a + b;
 }
 
-//void setup(std::string &pub, std::string &msk) {
-    //bswabe_pub_t *pub_key;
-    //bswabe_msk_t *msk_key;
 
-    //bswabe_setup(&pub_key, &msk_key);
-    //GByteArray *pub_str = bswabe_pub_serialize(pub_key);
-    //GByteArray *msk_str = bswabe_msk_serialize(msk_key);
-    //pub = std::string(pub_str->data, pub_str->len);
-    //msk = std::string(msk_str->data, msk_str->len);
-//}
-
-static PyObject* _foo(PyObject *self, PyObject *args) {
-    (void)self;
-    int _a, _b;
-    if (!PyArg_ParseTuple(args, "ii", &_a, &_b)) {
-        return nullptr;
-    }
-    int res = foo(_a, _b);
-    return PyLong_FromLong(res);
-}
 
 static PyObject* setup(PyObject *self, PyObject *args) {
     (void)self;
+    (void)args;
     bswabe_pub_t *pub;
     bswabe_msk_t *msk;
 
@@ -53,17 +36,58 @@ static PyObject* setup(PyObject *self, PyObject *args) {
     return ret;
 }
 
+// TODO char* to GbyteArray*
+//GByteArray* eat
+
+static PyObject* keygen(PyObject *self, PyObject *args) {
+    (void)self;
+
+    char *pk, *mk;
+    int pk_len, mk_len;
+    PyObject *attr_tuple;
+
+    if (!PyArg_ParseTuple(args, "t#t#O",
+                &pk, &pk_len,
+                &mk, &mk_len,
+                &attr_tuple
+                )) {
+        return nullptr;
+    }
+
+
+    //auto pub = bswabe_pub_unserialize(pk)
+    
+    std::vector<std::string> attrs;
+    auto attrlen = PyTuple_Size(attr_tuple);
+    for (int i = 0; i < attrlen; ++i) {
+        attrs.push_back(PyString_AsString(PyTuple_GetItem(attr_tuple, i)));
+    }
+
+    //pub = bswabe_pub_unserrialize();
+
+    PyMem_Free(pk);
+    PyMem_Free(mk);
+    PyMem_Free(attr_tuple);
+    return PyLong_FromLong(mk_len);
+}
+
 static PyMethodDef AbeModuleMethods[] = {
-    {
-        "foo",
-        _foo,
-        METH_VARARGS,
-        ""
-    },
+    //{
+        //"foo",
+        //_foo,
+        //METH_VARARGS,
+        //""
+    //},
     {
         "setup",
         setup,
         METH_NOARGS,
+        ""
+    },
+    {
+        "keygen",
+        keygen,
+        METH_VARARGS,
         ""
     },
     {NULL, NULL, 0, NULL}
