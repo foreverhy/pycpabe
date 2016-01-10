@@ -1,6 +1,6 @@
 
 CXX = g++
-CXXFLAGS = -fPIC  -Wall -I/usr/local/include/pbc -I/usr/include/glib-2.0 \
+CXXFLAGS = -fPIC -std=c++11 -Wall -I/usr/local/include/pbc -I/usr/include/glib-2.0 \
 		   -I/usr/lib/x86_64-linux-gnu/glib-2.0/include 
 
 LDFLAGS = -lglib-2.0 \

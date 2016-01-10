@@ -1,4 +1,5 @@
 #include <string>
+#include <cstring>
 #include <vector>
 #include <python2.7/Python.h>
 #include <unistd.h>
@@ -98,8 +99,8 @@ static PyObject* keygen(PyObject *self, PyObject *args) {
     GByteArray *prv_gbyte = bswabe_prv_serialize(prv);
 
     PyObject *ret = NULL;
-    std::string content(reinterpret_cast<char*>(prv_gbyte->data), prv_gbyte->len);
-    //ret = PyString_FromStringAndSize(reinterpret_cast<const char*>(prv_gbyte->data), prv_gbyte->len);
+    //std::string content(reinterpret_cast<char*>(prv_gbyte->data), prv_gbyte->len);
+    ret = PyString_FromStringAndSize(reinterpret_cast<const char*>(prv_gbyte->data), prv_gbyte->len);
     //ret = PyByteArray_FromStringAndSize(reinterpret_cast<const char*>(prv_gbyte->data), prv_gbyte->len);
 
 
@@ -108,7 +109,64 @@ static PyObject* keygen(PyObject *self, PyObject *args) {
     bswabe_msk_free(msk);
     bswabe_pub_free(pub);
 
-    return PyString_FromStringAndSize(content.data(), content.size());
+    return ret;
+}
+
+// cipher = encrypt(pub_path, message, attr)
+static PyObject* encrypt(PyObject *self, PyObject *args) {
+    (void)self;
+    
+
+    char *pub_path, *message, *policy; // needfree
+    int msg_len;
+
+    if (!PyArg_ParseTuple(args, "ss#s",
+                &pub_path, 
+                &message, &msg_len,
+                &policy) ) {
+        return NULL;
+    }
+
+    auto pub = bswabe_pub_unserialize(suck_file(pub_path), 1);
+    // needfree
+    
+    bswabe_cph_t *cph = nullptr;
+    element_t m;
+    if (!(cph = bswabe_enc(pub, m, policy)) ) {
+        return nullptr;
+    }
+
+    auto cph_buf = bswabe_cph_serialize(cph); // needfree
+    bswabe_cph_free(cph);
+
+    GByteArray *plt = g_byte_array_new();
+    g_byte_array_set_size(plt, msg_len);
+    std::memcpy(plt->data, message, msg_len);
+
+    auto aes_buf = aes_128_cbc_encrypt(plt, m);
+
+    g_byte_array_free(plt, 1);
+    element_clear(m);
+
+    std::string cipher;
+    cipher.reserve(4 + 4 + aes_buf->len + 4 + cph_buf->len);
+    for (int i = 3; i >= 0; --i) {
+        cipher.push_back((msg_len & 0xff << (i << 3)) >> (i << 3));
+    }
+    for (int i = 3; i >= 0; --i) {
+        cipher.push_back((aes_buf->len & 0xff << (i << 3)) >> (i << 3));
+    }
+    cipher.insert(cipher.end(), aes_buf->data, aes_buf->data + aes_buf->len);
+    for (int i = 3; i >= 0; --i) {
+        cipher.push_back((cph_buf->len & 0xff << (i << 3)) >> (i << 3));
+    }
+    cipher.insert(cipher.end(), cph_buf->data, cph_buf->data + cph_buf->len);
+
+    bswabe_pub_free(pub);
+    g_byte_array_free(cph_buf, 1);
+    g_byte_array_free(aes_buf, 1);
+    
+    return PyString_FromStringAndSize(cipher.data(), cipher.size());
 }
 
 static PyMethodDef AbeModuleMethods[] = {
@@ -127,6 +185,12 @@ static PyMethodDef AbeModuleMethods[] = {
     {
         "keygen",
         keygen,
+        METH_VARARGS,
+        ""
+    },
+    {
+        "encrypt",
+        encrypt,
         METH_VARARGS,
         ""
     },
