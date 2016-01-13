@@ -12,6 +12,7 @@
 #include "cpabe.h"
 
 #include "private.h"
+#include "policy_lang.h"
 
 #include <iostream>
 using std::cout;
@@ -132,9 +133,13 @@ static PyObject* encrypt(PyObject *self, PyObject *args) {
     
     bswabe_cph_t *cph = nullptr;
     element_t m;
-    if (!(cph = bswabe_enc(pub, m, policy)) ) {
+    char *final_policy = parse_policy_lang(policy);
+
+    if (!(cph = bswabe_enc(pub, m, final_policy)) ) {
         return nullptr;
     }
+    free(final_policy);
+    cerr << policy << endl;
 
     auto cph_buf = bswabe_cph_serialize(cph); // needfree
     bswabe_cph_free(cph);
