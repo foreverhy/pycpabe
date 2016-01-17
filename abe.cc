@@ -26,6 +26,11 @@ int foo(int a, int b) {
 
 namespace {
 
+gint
+comp_string( gconstpointer a, gconstpointer b)
+{
+	return std::strcmp(static_cast<const char*>(a), static_cast<const char*>(b));
+}
 
 void do_free_prv(bswabe_prv_t *prv) {
     element_clear(prv->d);
@@ -74,38 +79,29 @@ static PyObject* keygen(PyObject *self, PyObject *args) {
     (void)self;
     
 
-    char *pub_path, *msk_path;
-    PyObject *attr_tuple;
+    char *pub_path, *msk_path, *attr_str;
 
-    if (!PyArg_ParseTuple(args, "ssO", &pub_path, &msk_path, &attr_tuple) ) {
-        return NULL;
+    if (!PyArg_ParseTuple(args, "sss", &pub_path, &msk_path, &attr_str) ) {
+        return nullptr;
     }
+    GSList *alist = nullptr;
+    parse_attribute(&alist, attr_str);
+    alist = g_slist_sort(alist, comp_string);
     
-    std::vector<std::string> attrs;
-    int attrlen = PyTuple_Size(attr_tuple);
-    for (int i = 0; i < attrlen; ++i) {
-        attrs.push_back(PyString_AsString(PyTuple_GetItem(attr_tuple, i)));
+    std::vector<char*> attrs;
+    for (auto ap = alist; ap; ap = ap->next) {
+        attrs.push_back(static_cast<char*>(ap->data));
     }
-    std::vector<char*> attributes;
-    for (int i = 0; i < attrlen; ++i) {
-        attributes.push_back(const_cast<char*>(attrs[i].data()));
-    }
-    attributes.push_back(NULL);
+    attrs.push_back(nullptr);
 
+    auto pub = bswabe_pub_unserialize(suck_file(pub_path), 1);
+    auto msk = bswabe_msk_unserialize(pub, suck_file(msk_path), 1);
+    auto prv = bswabe_keygen(pub, msk, attrs.data());
+    auto gb_prv = bswabe_prv_serialize(prv);
 
-    bswabe_pub_t *pub = bswabe_pub_unserialize(suck_file(pub_path), 1);
-    bswabe_msk_t *msk = bswabe_msk_unserialize(pub, suck_file(msk_path), 1);
-    bswabe_prv_t *prv = bswabe_keygen(pub, msk, attributes.data());
+    auto ret = PyString_FromStringAndSize(reinterpret_cast<const char*>(gb_prv->data), gb_prv->len);
 
-    GByteArray *prv_gbyte = bswabe_prv_serialize(prv);
-
-    PyObject *ret = NULL;
-    //std::string content(reinterpret_cast<char*>(prv_gbyte->data), prv_gbyte->len);
-    ret = PyString_FromStringAndSize(reinterpret_cast<const char*>(prv_gbyte->data), prv_gbyte->len);
-    //ret = PyByteArray_FromStringAndSize(reinterpret_cast<const char*>(prv_gbyte->data), prv_gbyte->len);
-
-
-    g_byte_array_free(prv_gbyte, 1);
+    g_byte_array_free(gb_prv, 1);
     do_free_prv(prv);
     bswabe_msk_free(msk);
     bswabe_pub_free(pub);
