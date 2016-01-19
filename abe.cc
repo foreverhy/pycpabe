@@ -26,6 +26,48 @@ int foo(int a, int b) {
 
 namespace {
 
+
+std::vector<std::string> tokenize_attrs(const char *str) {
+    char quote = 0;
+    std::vector<std::string> ret;
+
+    std::string cur = "";
+    int len = std::strlen(str);
+
+    for (int i = 0; i < len; ++i) {
+        char ch = str[i];
+        if (quote) { // in string
+            if (ch == quote) {
+                if (cur != "") {
+                    ret.push_back(cur);
+                    cur = "";
+                }
+                quote = 0;
+            } else {
+                cur += ch;
+            }
+        } else {
+            if (ch == ' ' || ch == '\'' || ch == '\"') {
+                if (cur != "") {
+                    ret.push_back(cur);
+                    cur = "";
+                }
+                if (ch != ' ') {
+                    quote = ch;
+                }
+            } else {
+                cur += ch;
+            }
+        }
+    }
+
+    if (cur != "") {
+        ret.push_back(cur);
+    }
+
+    return ret;
+}
+
 gint
 comp_string( gconstpointer a, gconstpointer b)
 {
@@ -84,8 +126,15 @@ static PyObject* keygen(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "sss", &pub_path, &msk_path, &attr_str) ) {
         return nullptr;
     }
+
+    auto vattrs = tokenize_attrs(attr_str);
     GSList *alist = nullptr;
-    parse_attribute(&alist, attr_str);
+
+
+    for (auto &a : vattrs) {
+        parse_attribute(&alist, const_cast<char*>(a.data()));
+    }
+
     alist = g_slist_sort(alist, comp_string);
     
     std::vector<char*> attrs;
@@ -135,7 +184,6 @@ static PyObject* encrypt(PyObject *self, PyObject *args) {
         return nullptr;
     }
     free(final_policy);
-    cerr << policy << endl;
 
     auto cph_buf = bswabe_cph_serialize(cph); // needfree
     bswabe_cph_free(cph);
